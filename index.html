@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RetinaScope — Diabetic Retinopathy Detection</title>
+<meta name="description" content="AI-powered Diabetic Retinopathy screening via retinal fundus image analysis. MobileNetV2 · APTOS 2019.">
+<meta property="og:title" content="RetinaScope — DR Detection">
+<meta property="og:description" content="Upload a fundus photograph for automated DR severity assessment.">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=Instrument+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ─── REPLACE THIS URL WITH YOUR STREAMLIT APP URL ─────────────────────
+     After deploying on Streamlit Community Cloud, paste the URL below.
+     e.g. https://your-username-retinascope.streamlit.app
+  ─────────────────────────────────────────────────────────────────────── */
+  :root {
+    --streamlit-url: "https://YOUR-APP.streamlit.app";
+    --bg: #050a0f;
+    --surface: #0b1520;
+    --surface-2: #0f1e2e;
+    --border: rgba(0,180,220,0.12);
+    --border-bright: rgba(0,200,255,0.3);
+    --accent: #00c8f0;
+    --green: #00e5a0;
+    --yellow: #f5c518;
+    --red: #ff3d5a;
+    --text-primary: #e8f4f8;
+    --text-secondary: #7a9bb0;
+    --text-dim: #3d6070;
+    --font-display: 'DM Serif Display', serif;
+    --font-body: 'Instrument Sans', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    min-height: 100vh;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80vw 50vh at 60% -10%, rgba(0,140,200,0.06) 0%, transparent 70%),
+      radial-gradient(ellipse 60vw 40vh at -10% 60%, rgba(0,80,150,0.05) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 2;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 32px 80px;
+  }
+
+  /* ─── NAV ─── */
+  nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 28px 0 22px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 72px;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  .logo { display: flex; align-items: center; gap: 14px; }
+
+  .logo-icon {
+    width: 38px; height: 38px;
+  }
+
+  .logo-text-name {
+    font-family: var(--font-display);
+    font-size: 1.35rem;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+
+  .logo-text-sub {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    color: var(--accent);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .nav-pill {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 14px;
+    background: rgba(0,229,160,0.08);
+    border: 1px solid rgba(0,229,160,0.2);
+    border-radius: 100px;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    color: var(--green);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .nav-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: blink 2s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%,100% { opacity:1; } 50% { opacity:0.4; }
+  }
+
+  /* ─── HERO ─── */
+  .hero {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 64px;
+    align-items: center;
+    margin-bottom: 96px;
+  }
+
+  .hero-left { animation: fadeUp 0.7s 0.1s ease both; }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    color: var(--accent);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 22px;
+  }
+
+  .eyebrow::before {
+    content: '';
+    width: 24px; height: 1px;
+    background: var(--accent);
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-size: clamp(2.6rem, 4.5vw, 3.8rem);
+    line-height: 1.04;
+    letter-spacing: -0.03em;
+    margin-bottom: 22px;
+  }
+
+  h1 em { font-style: italic; color: var(--accent); }
+
+  .hero-desc {
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    line-height: 1.72;
+    margin-bottom: 36px;
+    max-width: 440px;
+  }
+
+  .cta-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 28px;
+    background: linear-gradient(135deg, rgba(0,200,240,0.2), rgba(0,150,200,0.12));
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    color: var(--accent);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s;
+    letter-spacing: 0.02em;
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 0 28px rgba(0,200,240,0.22);
+    transform: translateY(-2px);
+  }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 24px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: 0.88rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all 0.3s;
+  }
+
+  .btn-ghost:hover {
+    border-color: rgba(0,180,220,0.3);
+    color: var(--text-primary);
+  }
+
+  /* ─── HERO RIGHT ─── */
+  .hero-right { animation: fadeUp 0.7s 0.2s ease both; }
+
+  .mockup-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .mockup-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.5;
+  }
+
+  .mockup-topbar {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .mock-dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  .mockup-body { padding: 28px; }
+
+  .mockup-eye {
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: 1.5px solid var(--border-bright);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    margin: 0 auto 18px;
+    position: relative;
+  }
+
+  .mockup-eye::after {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 1px dashed rgba(0,200,240,0.25);
+    animation: slow-spin 10s linear infinite;
+  }
+
+  @keyframes slow-spin { to { transform: rotate(360deg); } }
+
+  .mockup-upload-area {
+    background: var(--surface-2);
+    border: 1px dashed rgba(0,180,220,0.25);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+    margin-bottom: 16px;
+  }
+
+  .mockup-upload-text {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .mockup-bars { display: flex; flex-direction: column; gap: 8px; }
+
+  .mockup-bar-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 40px;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .mockup-bar-label {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    color: var(--text-dim);
+  }
+
+  .mockup-track {
+    height: 5px;
+    background: var(--surface);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .mockup-fill {
+    height: 100%;
+    border-radius: 3px;
+    animation: grow 2s 1s ease forwards;
+    width: 0;
+  }
+
+  @keyframes grow { to { width: var(--w); } }
+
+  .mockup-pct {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    color: var(--text-dim);
+    text-align: right;
+  }
+
+  /* ─── FEATURES GRID ─── */
+  .features-label {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 28px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: fadeUp 0.7s 0.3s ease both;
+  }
+
+  .features-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 80px;
+    animation: fadeUp 0.7s 0.35s ease both;
+  }
+
+  .feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+    transition: border-color 0.3s;
+  }
+
+  .feature-card:hover { border-color: rgba(0,180,220,0.3); }
+
+  .feature-icon {
+    font-size: 1.4rem;
+    margin-bottom: 12px;
+  }
+
+  .feature-title {
+    font-family: var(--font-body);
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+  }
+
+  .feature-desc {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  /* ─── TECH STRIP ─── */
+  .tech-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 80px;
+    position: relative;
+    overflow: hidden;
+    animation: fadeUp 0.7s 0.4s ease both;
+  }
+
+  .tech-strip::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.3;
+  }
+
+  .tech-item {
+    padding: 22px 24px;
+    border-right: 1px solid var(--border);
+  }
+
+  .tech-item:last-child { border-right: none; }
+
+  .tech-label {
+    font-family: var(--font-mono);
+    font-size: 0.58rem;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .tech-val {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+
+  /* ─── DISCLAIMER ─── */
+  .disclaimer {
+    padding: 16px 20px;
+    border: 1px solid rgba(245,197,24,0.18);
+    border-radius: 12px;
+    background: rgba(245,197,24,0.04);
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 48px;
+    animation: fadeUp 0.7s 0.5s ease both;
+  }
+
+  .disclaimer p {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  .disclaimer strong { color: var(--yellow); }
+
+  /* ─── FOOTER ─── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding-top: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    animation: fadeUp 0.7s 0.55s ease both;
+  }
+
+  footer p {
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+  }
+
+  footer a { color: var(--accent); text-decoration: none; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 860px) {
+    .hero { grid-template-columns: 1fr; gap: 40px; }
+    .features-grid { grid-template-columns: 1fr 1fr; }
+    .tech-strip { grid-template-columns: repeat(2, 1fr); }
+    .tech-item:nth-child(2) { border-right: none; }
+  }
+
+  @media (max-width: 540px) {
+    .wrap { padding: 0 16px 60px; }
+    h1 { font-size: 2.2rem; }
+    .features-grid { grid-template-columns: 1fr; }
+    .tech-strip { grid-template-columns: 1fr; }
+    .tech-item { border-right: none; border-bottom: 1px solid var(--border); }
+    .tech-item:last-child { border-bottom: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- NAV -->
+  <nav>
+    <div class="logo">
+      <svg class="logo-icon" viewBox="0 0 38 38" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="19" cy="19" r="18" stroke="rgba(0,200,240,0.25)" stroke-width="1"/>
+        <circle cx="19" cy="19" r="11" stroke="rgba(0,200,240,0.4)" stroke-width="1"/>
+        <circle cx="19" cy="19" r="5.5" fill="rgba(0,200,240,0.12)" stroke="rgba(0,200,240,0.6)" stroke-width="1.5"/>
+        <circle cx="19" cy="19" r="2.2" fill="#00c8f0"/>
+        <line x1="19" y1="1" x2="19" y2="7" stroke="rgba(0,200,240,0.4)" stroke-width="1"/>
+        <line x1="19" y1="31" x2="19" y2="37" stroke="rgba(0,200,240,0.4)" stroke-width="1"/>
+        <line x1="1" y1="19" x2="7" y2="19" stroke="rgba(0,200,240,0.4)" stroke-width="1"/>
+        <line x1="31" y1="19" x2="37" y2="19" stroke="rgba(0,200,240,0.4)" stroke-width="1"/>
+      </svg>
+      <div>
+        <div class="logo-text-name">RetinaScope</div>
+        <div class="logo-text-sub">DR Detection System</div>
+      </div>
+    </div>
+    <div class="nav-pill">
+      <div class="nav-dot"></div>
+      Live on Streamlit
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-left">
+      <div class="eyebrow">AI-Powered Ophthalmology</div>
+      <h1>Detect <em>Retinal</em><br>Pathology<br>Instantly</h1>
+      <p class="hero-desc">Upload a fundus photograph to receive an automated severity grade for Diabetic Retinopathy — powered by MobileNetV2 trained on the APTOS 2019 dataset using focal loss optimisation.</p>
+      <div class="cta-row">
+        <!-- ⚠️ REPLACE WITH YOUR STREAMLIT APP URL -->
+        <a href="https://YOUR-APP.streamlit.app" target="_blank" class="btn-primary">
+          🔬 &nbsp;Launch App
+        </a>
+        <a href="https://github.com/YOUR-USERNAME/retinascope" target="_blank" class="btn-ghost">
+          ⭐ &nbsp;View on GitHub
+        </a>
+      </div>
+    </div>
+
+    <div class="hero-right">
+      <div class="mockup-card">
+        <div class="mockup-topbar">
+          <div class="mock-dot" style="background:#ff5f57"></div>
+          <div class="mock-dot" style="background:#febc2e"></div>
+          <div class="mock-dot" style="background:#28c840"></div>
+          <span style="font-family:var(--font-mono);font-size:0.6rem;color:var(--text-dim);margin-left:8px">retinascope.streamlit.app</span>
+        </div>
+        <div class="mockup-body">
+          <div class="mockup-eye">👁</div>
+          <div class="mockup-upload-area">
+            <div class="mockup-upload-text">Drop fundus image to analyse</div>
+          </div>
+          <div style="font-family:var(--font-mono);font-size:0.58rem;color:var(--text-dim);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:10px">Class Probability Distribution</div>
+          <div class="mockup-bars">
+            <div class="mockup-bar-row">
+              <span class="mockup-bar-label">No DR</span>
+              <div class="mockup-track"><div class="mockup-fill" style="background:#00e5a0;--w:78%"></div></div>
+              <span class="mockup-pct">78.4%</span>
+            </div>
+            <div class="mockup-bar-row">
+              <span class="mockup-bar-label">Mild NPDR</span>
+              <div class="mockup-track"><div class="mockup-fill" style="background:#f5c518;--w:11%"></div></div>
+              <span class="mockup-pct">11.2%</span>
+            </div>
+            <div class="mockup-bar-row">
+              <span class="mockup-bar-label">Moderate NPDR</span>
+              <div class="mockup-track"><div class="mockup-fill" style="background:#ff7c2a;--w:7%"></div></div>
+              <span class="mockup-pct">7.1%</span>
+            </div>
+            <div class="mockup-bar-row">
+              <span class="mockup-bar-label">Severe NPDR</span>
+              <div class="mockup-track"><div class="mockup-fill" style="background:#ff5533;--w:2%"></div></div>
+              <span class="mockup-pct">2.4%</span>
+            </div>
+            <div class="mockup-bar-row">
+              <span class="mockup-bar-label">Proliferative</span>
+              <div class="mockup-track"><div class="mockup-fill" style="background:#ff3d5a;--w:1%"></div></div>
+              <span class="mockup-pct">0.9%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <div class="features-label">Key Capabilities</div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">🧠</div>
+      <div class="feature-title">MobileNetV2 Backbone</div>
+      <div class="feature-desc">Fine-tuned on 3,662 labelled fundus images with ImageNet pretrained weights and last-30-layer fine-tuning strategy.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🎯</div>
+      <div class="feature-title">Focal Loss Optimised</div>
+      <div class="feature-desc">Addresses severe class imbalance in DR datasets using focal loss (γ=2, α=0.25) with class-weight balancing.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <div class="feature-title">5-Grade Classification</div>
+      <div class="feature-desc">Predicts DR severity from Grade 0 (No DR) to Grade 4 (Proliferative) with full probability distribution output.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">⚡</div>
+      <div class="feature-title">Real-Time Inference</div>
+      <div class="feature-desc">Sub-second prediction on CPU. Upload any PNG/JPG/TIFF fundus image and receive results instantly.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💊</div>
+      <div class="feature-title">Clinical Recommendations</div>
+      <div class="feature-desc">Each grade is paired with grade-specific clinical action guidance, referral urgency, and follow-up timelines.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🔬</div>
+      <div class="feature-title">Research Grade</div>
+      <div class="feature-desc">Built on the APTOS 2019 Blindness Detection competition dataset. Suitable for academic research and screening studies.</div>
+    </div>
+  </div>
+
+  <!-- TECH STRIP -->
+  <div class="tech-strip">
+    <div class="tech-item">
+      <div class="tech-label">Backbone</div>
+      <div class="tech-val">MobileNetV2</div>
+    </div>
+    <div class="tech-item">
+      <div class="tech-label">Weights</div>
+      <div class="tech-val">ImageNet → Fine-tuned</div>
+    </div>
+    <div class="tech-item">
+      <div class="tech-label">Classes</div>
+      <div class="tech-val">5 (Grade 0 – 4)</div>
+    </div>
+    <div class="tech-item">
+      <div class="tech-label">Framework</div>
+      <div class="tech-val">TF / Keras 3.x</div>
+    </div>
+  </div>
+
+  <!-- DISCLAIMER -->
+  <div class="disclaimer">
+    <span style="font-size:1rem;flex-shrink:0;margin-top:2px">⚠️</span>
+    <p><strong>Clinical Disclaimer:</strong> RetinaScope is intended for research and educational purposes only. Results must not replace professional ophthalmological evaluation. All findings must be reviewed and confirmed by a qualified medical practitioner before any clinical decisions are made.</p>
+  </div>
+
+  <!-- FOOTER -->
+  <footer>
+    <p>RetinaScope · MobileNetV2 · APTOS 2019 · Built with TensorFlow &amp; Streamlit</p>
+    <p>
+      <a href="https://YOUR-APP.streamlit.app" target="_blank">Launch App →</a>
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>
