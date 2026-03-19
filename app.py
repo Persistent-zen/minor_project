@@ -300,12 +300,28 @@ hr {
 # ── MODEL LOADER ─────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
 def load_model():
-    """Load the trained Keras model once and cache it."""
+    """Load trained Keras model. Handles cross-version TF compatibility."""
+    def focal_loss_fn(gamma=2., alpha=0.25):
+        def loss(y_true, y_pred):
+            y_true = tf.cast(y_true, tf.float32)
+            epsilon = 1e-7
+            y_pred = tf.clip_by_value(y_pred, epsilon, 1. - epsilon)
+            cross_entropy = -y_true * tf.math.log(y_pred)
+            weight = alpha * tf.pow(1 - y_pred, gamma)
+            return tf.reduce_mean(tf.reduce_sum(weight * cross_entropy, axis=1))
+        return loss
+    custom_objects = {"focal_loss": focal_loss_fn, "loss": focal_loss_fn()}
     try:
         model = tf.keras.models.load_model(MODEL_PATH, compile=False)
         return model, None
-    except Exception as e:
-        return None, str(e)
+    except Exception as e1:
+        try:
+            model = tf.keras.models.load_model(
+                MODEL_PATH, compile=False, custom_objects=custom_objects
+            )
+            return model, None
+        except Exception as e2:
+            return None, f"Could not load model.\nError 1: {e1}\nError 2: {e2}"
 
 
 def preprocess_image(pil_img: Image.Image) -> np.ndarray:
